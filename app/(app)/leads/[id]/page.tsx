@@ -56,6 +56,14 @@ export default async function Lead(props: PageProps<"/leads/[id]">) {
               <dd className="font-display text-[1.6rem] font-semibold tnum">{fmt.usd(creator.est_launch_revenue)}</dd>
             </div>
           </dl>
+          {creator.stage === "needs_review" && (creator.review_reasons ?? []).length > 0 && (
+            <div className="mt-4 rounded-xl bg-amber-tint px-4 py-3 max-w-[68ch]">
+              <p className="font-semibold text-amber">Check before approving</p>
+              <ul className="text-sm mt-1 list-disc pl-5">
+                {creator.review_reasons.map((r) => <li key={r}>{r}</li>)}
+              </ul>
+            </div>
+          )}
           {creator.top_question && (
             <p className="mt-4 text-sm"><span className="font-semibold">Most-asked question:</span> {creator.top_question}</p>
           )}

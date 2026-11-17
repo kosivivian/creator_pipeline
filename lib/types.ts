@@ -1,5 +1,5 @@
 export type Stage =
-  | "found" | "qualified" | "ready" | "warming" | "dm_sent"
+  | "found" | "needs_review" | "qualified" | "ready" | "warming" | "dm_sent"
   | "followup_1" | "followup_2" | "replied" | "closed_no_reply" | "rejected";
 export type ActionType = "follow_like" | "comment" | "story_reply" | "dm" | "followup_1" | "followup_2";
 export type ActionStatus = "pending" | "done" | "skipped";
@@ -25,6 +25,7 @@ export type Creator = {
   location_signal: string | null;
   audit: Record<string, boolean>;
   audit_passed: boolean | null;
+  review_reasons: string[];
   demand_score: number;
   evidence_summary: string | null;
   sample_comments: Comment[];

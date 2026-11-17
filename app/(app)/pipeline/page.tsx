@@ -3,6 +3,7 @@ import { supabaseServer } from "@/lib/supabase-server";
 import { AGENT_LABEL, FLOW, fmt } from "@/lib/labels";
 import type { AgentRun, Creator, Stage } from "@/lib/types";
 import { StartWarmupButton } from "@/components/StartWarmupButton";
+import { ReviewButtons } from "@/components/ReviewButtons";
 
 export const dynamic = "force-dynamic";
 
@@ -14,11 +15,12 @@ const AGENT_JOB = {
 
 export default async function Pipeline() {
   const supabase = await supabaseServer();
-  const [{ data: counts }, { data: runs }, { data: ready }, { data: replied }] = await Promise.all([
+  const [{ data: counts }, { data: runs }, { data: ready }, { data: replied }, { data: review }] = await Promise.all([
     supabase.from("pipeline_counts").select("*"),
     supabase.from("agent_runs").select("*").order("started_at", { ascending: false }).limit(30),
     supabase.from("creators").select("*, niches(name)").eq("stage", "ready").order("demand_score", { ascending: false }).limit(20),
     supabase.from("creators").select("*, niches(name)").eq("stage", "replied").order("stage_changed_at", { ascending: false }).limit(10),
+    supabase.from("creators").select("*, niches(name)").eq("stage", "needs_review").order("demand_score", { ascending: false }).limit(20),
   ]);
 
   const n = (s: Stage) => counts?.find((c) => c.stage === s)?.n ?? 0;
@@ -72,6 +74,32 @@ export default async function Pipeline() {
           })}
         </ul>
       </section>
+
+      {(review ?? []).length > 0 && (
+        <section>
+          <div className="flex items-baseline justify-between mb-3">
+            <h2>Needs your review</h2>
+            <span className="text-muted text-sm">{n("needs_review")} waiting</span>
+          </div>
+          <p className="text-muted text-sm mb-3 max-w-[68ch]">
+            These passed the checks, but something needs a human look first. Nothing happens to them until you approve.
+          </p>
+          <ul className="divide-y divide-line border-y border-line">
+            {(review as Creator[]).map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                <div className="max-w-[60ch]">
+                  <Link href={`/leads/${c.id}`} className="font-semibold hover:underline">@{c.handle}</Link>
+                  <p className="text-muted text-sm">
+                    {fmt.num(c.followers)} followers, {c.demand_score} asking to learn
+                  </p>
+                  <p className="text-amber text-sm">{(c.review_reasons ?? []).join("; ")}</p>
+                </div>
+                <ReviewButtons creatorId={c.id} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section>
         <div className="flex items-baseline justify-between mb-3">

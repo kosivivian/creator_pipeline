@@ -13,6 +13,7 @@ export const FLOW: { stage: Stage; label: string }[] = [
 
 export const STAGE_LABEL: Record<Stage, string> = {
   found: "Found",
+  needs_review: "Needs review",
   qualified: "Qualified",
   ready: "Ready to warm up",
   warming: "Warming up",

@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 const FILTERS: { key: string; label: string; stages: Stage[] }[] = [
   { key: "all", label: "All", stages: [] },
+  { key: "needs_review", label: "Needs review", stages: ["needs_review"] },
   { key: "qualified", label: "Qualified", stages: ["qualified"] },
   { key: "ready", label: "Ready", stages: ["ready"] },
   { key: "warming", label: "Warming up", stages: ["warming"] },
