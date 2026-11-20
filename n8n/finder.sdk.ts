@@ -28,7 +28,7 @@ const settings = node({
       includeOtherFields: false,
       assignments: {
         assignments: [
-          { id: 's1', name: 'tagsPerNiche', value: 3, type: 'number' },
+          { id: 's1', name: 'tagsPerNiche', value: 2, type: 'number' },
           { id: 's2', name: 'postsPerTag', value: 15, type: 'number' },
           { id: 's3', name: 'maxProfiles', value: 100, type: 'number' },
           { id: 's4', name: 'maxCommentCreators', value: 10, type: 'number' },
@@ -36,12 +36,15 @@ const settings = node({
           { id: 's6', name: 'commentsPerPost', value: 20, type: 'number' },
           { id: 's7', name: 'minFollowers', value: 10000, type: 'number' },
           { id: 's8', name: 'maxFollowers', value: 300000, type: 'number' },
-          { id: 's9', name: 'minDemand', value: 3, type: 'number' },
+          { id: 's9', name: 'minEngagement', value: 1, type: 'number' },
+          { id: 's11', name: 'reviewEngagement', value: 0.5, type: 'number' },
+          { id: 's12', name: 'reviewMinComments', value: 15, type: 'number' },
+          { id: 's13', name: 'maxDaysSincePost', value: 14, type: 'number' },
           { id: 's10', name: 'priceUsd', value: 97, type: 'number' }
         ]
       }
     },
-    output: [{ tagsPerNiche: 3, postsPerTag: 15, maxProfiles: 100, maxCommentCreators: 10, postsPerCreator: 3, commentsPerPost: 20, minFollowers: 10000, maxFollowers: 300000, minDemand: 3, priceUsd: 97 }]
+    output: [{ tagsPerNiche: 2, postsPerTag: 15, maxProfiles: 100, maxCommentCreators: 10, postsPerCreator: 3, commentsPerPost: 20, minFollowers: 10000, maxFollowers: 300000, minEngagement: 1, reviewEngagement: 0.5, reviewMinComments: 15, maxDaysSincePost: 14, priceUsd: 97 }]
   }
 });
 
@@ -223,7 +226,7 @@ const audit = node({
       jsCode: `const cfg = $('Finder Settings').first().json;
 const nicheByUser = $('Pick New Creators').first().json.nicheByUser || {};
 const DIGITAL_STORE = /(selar\\.(co|com)|stan\\.store|gumroad|mainstack|payhip|kajabi|teachable|thinkific|podia|systeme\\.io|chariow|nestuge|learnworlds|skool\\.com|thecreatorshop)/i;
-const MAYBE_STORE = /(shopify|myshopify|paystack\\.(shop|com)|flutterwave\\.(store|com)|paypal\\.me|selfany|koji)/i;
+const MAYBE_STORE = /(shopify|myshopify|paystack\\.(shop|com)|flutterwave\\.(store|com)|paypal\\.me|selfany|koji|conectr\\.me|calendly|eventbrite|bit\\.ly)/i;
 const PRODUCT_WORDS = /(e-?book|masterclass|my course|\\/course|enrol|enroll|academy|cohort|bootcamp|grab my|buy my|get my guide|digital product|pre-?order my)/i;
 const LINKPAGE = /(linktr\\.ee|beacons\\.ai|bio\\.link|linkin\\.bio|lnk\\.bio|taplink|campsite\\.bio|solo\\.to|msha\\.ke|snipfeed|komi\\.io|hoo\\.be|withkoji)/i;
 const NG_PLACE = /(lagos|abuja|nigeria|naija|(^|[^a-z0-9])9ja|port ?harcourt|ibadan|enugu|owerri|kaduna|\\bkano\\b|benin city|asaba|\\buyo\\b|calabar|abeokuta|ilorin|\\bjos\\b|\\+234|₦|\\bnaira\\b|🇳🇬|,\\s*ng\\b)/i;
@@ -232,6 +235,7 @@ const FACELESS = /(\\bai\\b|a\\.i\\.|animation|animated|cartoon|stickman|\\bfilm
 const BRAND = /(welcome to|official (page|account)|\\bwe (are|make|sell|deliver)|our (store|products|brand)|shop now|order now|\\bltd\\b|limited|enterprises|\\bnews\\b|updates|\\bgist\\b|\\bblog\\b|\\btv\\b|media|magazine)/i;
 const BRAND_CATEGORY = /(product\\/service|brand|company|shopping|retail|media|news|entertainment website|publisher|magazine|baby goods|kids store)/i;
 const EMAIL = /[\\w.+-]+@[\\w-]+\\.[\\w.]+/;
+const LEAD_MAGNET = /(comment ["“']?[A-Z]{3,}["”']?\\b|free (money |)guide|free (e-?book|checklist|template|class|webinar|session)|join (my|our) (free )?(whatsapp|telegram|community)|dm me ["“']?[A-Z]{3,})/;
 const DAY = 86400000;
 const out = [];
 for (const it of $input.all()) {
@@ -262,25 +266,30 @@ for (const it of $input.all()) {
   const email = (bio.match(EMAIL) || [])[0] || p.businessEmail || p.publicEmail || null;
   const a = {
     followers_in_range: followers >= cfg.minFollowers && followers <= cfg.maxFollowers,
-    real_engagement: er >= 1,
+    real_engagement: er >= cfg.minEngagement,
     contact_email: !!email,
     business_links: links.length > 0,
     no_digital_product: !digitalStore && !productInText,
     niche_fit: !!nicheByUser[p.username.toLowerCase()],
     buying_power: er >= 2 && followers >= cfg.minFollowers,
-    posts_consistently: recent >= 4 && now - newest < 14 * DAY
+    posts_consistently: recent >= 4 && now - newest < cfg.maxDaysSincePost * DAY
   };
   const reasons = [];
   if (!a.followers_in_range) reasons.push('followers outside ' + cfg.minFollowers + '-' + cfg.maxFollowers);
   if (!a.no_digital_product) reasons.push('already sells something (' + (digitalStore || 'bio mentions a product') + ')');
   if (!ngPlace && !ngSlang) reasons.push('no Nigerian signal');
   if (!a.posts_consistently) reasons.push('not posting consistently');
+  const avgComments = posts.length ? posts.reduce((s, x) => s + Math.max(x.commentsCount || 0, 0), 0) / posts.length : 0;
+  const lowButTalkative = !a.real_engagement && er >= cfg.reviewEngagement && avgComments >= cfg.reviewMinComments;
+  if (!a.real_engagement && !lowButTalkative) reasons.push('engagement ' + er + '% is under ' + cfg.minEngagement + '%');
   const review = [];
   if (maybeStore && a.no_digital_product) review.push('has a ' + maybeStore.replace(/^https?:\\/\\//, '').split('/')[0] + ' link that may sell digital products');
   if (!ngPlace && ngSlang) review.push('only Nigerian slang ("' + ngSlang[0] + '"), no Nigerian place');
   if (faceless) review.push('may be a faceless, AI or animation page');
   if (brand) review.push('may be a brand or media page, not a person');
   if (likesHidden) review.push('likes are hidden; engagement uses comments only');
+  if (lowButTalkative) review.push('engagement is only ' + er + '% but posts average ' + Math.round(avgComments) + ' comments');
+  const leadMagnet = (captions + ' ' + bio).match(LEAD_MAGNET);
   out.push({ json: {
     handle: p.username,
     full_name: p.fullName || null,
@@ -298,6 +307,7 @@ for (const it of $input.all()) {
     location_signal: ngPlace ? 'Mentions "' + ngPlace[0].trim() + '"' : ngSlang ? 'Uses Nigerian slang "' + ngSlang[0] + '"' : null,
     audit: a,
     passes: reasons.length === 0,
+    lead_magnet: leadMagnet ? leadMagnet[0] : null,
     reject_reasons: reasons,
     review_reasons: review,
     recent_posts: posts.slice(0, 6).map(x => ({ url: x.url, caption: (x.caption || '').slice(0, 400), comments: x.commentsCount || 0, likes: likesHidden ? null : x.likesCount || 0, posted_at: x.timestamp || null, image: x.displayUrl || null })),
@@ -353,7 +363,7 @@ const markLinkPage = node({
       jsCode: `const c = { ...$('Check Link-in-bio Page?').item.json };
 const html = String($json.page || '');
 const DIGITAL_STORE = /(selar\\.(co|com)|stan\\.store|gumroad|mainstack|payhip|kajabi|teachable|thinkific|podia|systeme\\.io|chariow|nestuge|learnworlds|skool\\.com)/i;
-const MAYBE_STORE = /(myshopify|shopify\\.com|paystack\\.(shop|com)|flutterwave\\.(store|com)|paypal\\.me)/i;
+const MAYBE_STORE = /(myshopify|shopify\\.com|paystack\\.(shop|com)|flutterwave\\.(store|com)|paypal\\.me|conectr\\.me|eventbrite)/i;
 const m = html.match(DIGITAL_STORE);
 const maybe = html.match(MAYBE_STORE);
 if (m) {
@@ -470,18 +480,17 @@ for (const c of creators) {
   const engaged = (c.followers || 0) * ((c.engagement_rate || 0) / 100);
   const est = Math.round(engaged * 0.03 * cfg.priceUsd);
   const wasRead = read.has(c.handle);
-  if (c.passes && !wasRead) continue;
-  const ok = c.passes && wasRead && demand >= cfg.minDemand;
+  const ok = c.passes;
   const reviewReasons = c.review_reasons || [];
   const stage = ok ? (reviewReasons.length ? 'needs_review' : 'qualified') : 'rejected';
   if (stage === 'qualified') qualified += 1;
   if (stage === 'needs_review') review += 1;
   const reasons = [...(c.reject_reasons || [])];
-  if (c.passes && wasRead && demand < cfg.minDemand) reasons.push('only ' + demand + (demand === 1 ? ' person' : ' people') + ' asked to learn');
   const sample = distinct.sort((a, b) => b.text.length - a.text.length).slice(0, 6);
   const parts = [
     (c.followers || 0).toLocaleString('en-US') + ' followers, ' + c.engagement_rate + '% engagement.',
-    wasRead ? (demand === 1 ? '1 person' : demand + ' different people') + ' asked to learn across their top ' + cfg.postsPerCreator + ' recent posts.' : null,
+    wasRead ? (demand ? 'Bonus: ' + (demand === 1 ? '1 person' : demand + ' different people') + ' asked to learn in the comments of their top ' + cfg.postsPerCreator + ' posts.' : 'Nobody asked to learn in the comments we read (not required).') : null,
+    c.lead_magnet ? 'Bonus: already gives away a free resource ("' + c.lead_magnet + '"), so the audience takes offers but there is nothing to buy.' : null,
     sample[0] ? 'For example: "' + sample[0].text.slice(0, 140) + '".' : null,
     c.link_type === 'none' ? 'No link in bio.' : (c.link_note ? c.link_note + '.' : (c.link_type === 'store' ? 'Has a store link.' : 'Link in bio has no store.')),
     c.location_signal ? c.location_signal + '.' : null,
@@ -609,7 +618,7 @@ const logError = node({
   }
 });
 
-const note = sticky('## Finder\nFinds Nigerian Instagram creators in your active niches, audits them against the Growth Partner checklist, reads comments for "teach me" demand, and saves leads to Supabase.\n\n**Cost per run** with these settings is about $2 of Apify credit. Change the numbers in **Finder Settings** to scan more or less.\n\n**Credentials:** `Apify token` (header Authorization: Bearer <token>) and `Supabase creator-pipeline` (service role key).', [], { color: 4 });
+const note = sticky('## Finder\nFinds Nigerian Instagram creators in your active niches, audits them (10k-300k followers, Nigerian, no digital product, posting in the last 14 days, 1%+ engagement), and saves leads to Supabase. People asking to learn in the comments, or a free guide/lead magnet, are a bonus noted in the evidence, not a requirement.\n\n**Cost per run** with these settings is about $2 of Apify credit. Change the numbers in **Finder Settings** to scan more or less.\n\n**Credentials:** `Apify token` (header Authorization: Bearer <token>) and `Supabase creator-pipeline` (service role key).', [], { color: 4 });
 
 export default workflow('creator-finder', 'Creator Pipeline - Finder')
   .add(weekly)
